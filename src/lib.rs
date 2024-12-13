@@ -10,37 +10,43 @@ use reqwest::RequestBuilder;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+/// Supabase Auth user.
+///
+/// See <https://supabase.com/docs/reference/javascript/auth-getuser> for fields documentation.
 #[derive(Serialize, Deserialize)]
 pub struct User {
-    id: Uuid,
-    aud: String,
-    role: String,
-    email: String,
-    phone: String,
-    last_sign_in_at: DateTime<Utc>,
-    app_metadata: serde_json::Value,
-    user_metadata: serde_json::Value,
-    identities: serde_json::Value,
-    created_at: DateTime<Utc>,
-    updated_at: DateTime<Utc>,
+    pub id: Uuid,
+    pub aud: String,
+    pub role: String,
+    pub email: String,
+    pub phone: String,
+    pub last_sign_in_at: DateTime<Utc>,
+    pub app_metadata: serde_json::Value,
+    pub user_metadata: serde_json::Value,
+    pub identities: serde_json::Value,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
 }
 
+/// Supabase Auth sign up response.
 #[derive(Serialize, Deserialize)]
 pub struct Signup {
-    access_token: String,
-    token_type: String,
-    expires_in: i64,
-    expires_at: i64,
-    refresh_token: String,
-    user: User,
+    pub access_token: String,
+    pub token_type: String,
+    pub expires_in: i64,
+    pub expires_at: i64,
+    pub refresh_token: String,
+    pub user: User,
 }
 
+/// Error type.
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
     #[error("{0}")]
     Http(#[from] reqwest::Error),
 }
 
+/// Supabase Auth HTTP client.
 #[derive(Clone)]
 pub struct Client {
     token: String,
