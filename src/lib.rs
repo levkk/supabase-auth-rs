@@ -111,6 +111,12 @@ impl Signup {
             .await?;
         Ok(res)
     }
+
+    /// Check if this JWT token expired.
+    pub fn expired(&self) -> bool {
+        let now = Utc::now().timestamp();
+        self.expires_at < now
+    }
 }
 
 #[cfg(test)]
