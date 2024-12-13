@@ -13,7 +13,7 @@ use uuid::Uuid;
 /// Supabase Auth user.
 ///
 /// See <https://supabase.com/docs/reference/javascript/auth-getuser> for fields documentation.
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct User {
     pub id: Uuid,
     pub aud: String,
@@ -29,7 +29,7 @@ pub struct User {
 }
 
 /// Supabase Auth sign up response.
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Signup {
     pub access_token: String,
     pub token_type: String,
