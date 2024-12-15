@@ -39,6 +39,33 @@ pub struct Signup {
     pub user: User,
 }
 
+/// Supabase signup options.
+#[derive(Clone, Debug)]
+pub struct AnonymousSigninOptions {
+    /// Captcha token.
+    pub captcha_token: Option<String>,
+    /// Metadata.
+    pub data: serde_json::Value,
+}
+
+impl AnonymousSigninOptions {
+    fn captcha_token(&self) -> serde_json::Value {
+        match self.captcha_token.as_ref() {
+            Some(token) => serde_json::Value::String(token.clone()),
+            None => serde_json::Value::Null,
+        }
+    }
+}
+
+impl Default for AnonymousSigninOptions {
+    fn default() -> Self {
+        Self {
+            captcha_token: None,
+            data: serde_json::json!({}),
+        }
+    }
+}
+
 /// Error type.
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
@@ -78,14 +105,19 @@ impl Client {
     }
 
     /// Create an anonymous user.
-    pub async fn sign_in_anonymously(&self) -> Result<Signup, Error> {
+    pub async fn sign_in_anonymously(
+        &self,
+        options: &AnonymousSigninOptions,
+    ) -> Result<Signup, Error> {
         let req = self.request("signup");
-        let res = req
-            .json(&serde_json::json!({"data": {}}))
-            .send()
-            .await?
-            .json::<Signup>()
-            .await?;
+        let json = serde_json::json!({
+            "data": options.data,
+            "gotrue_meta_security": {
+                "captcha_token": options.captcha_token(),
+            }
+
+        });
+        let res = req.json(&json).send().await?.json::<Signup>().await?;
 
         Ok(res)
     }
