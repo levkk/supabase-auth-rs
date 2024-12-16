@@ -151,6 +151,26 @@ impl Signup {
     }
 }
 
+impl User {
+    /// Update user attributes.
+    ///
+    /// See <https://supabase.com/docs/reference/javascript/auth-updateuser> for allowed attributes.
+    pub async fn update(
+        self,
+        client: &Client,
+        attributes: &serde_json::Value,
+    ) -> Result<Self, Error> {
+        let res = reqwest::Client::new()
+            .patch(&format!("{}/auth/v1/user", &client.endpoint))
+            .json(attributes)
+            .send()
+            .await?
+            .json::<User>()
+            .await?;
+        Ok(res)
+    }
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
