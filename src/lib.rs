@@ -158,11 +158,27 @@ impl User {
     pub async fn update(
         self,
         client: &Client,
+        signup: &Signup,
         attributes: &serde_json::Value,
     ) -> Result<Self, Error> {
         let res = reqwest::Client::new()
             .patch(&format!("{}/auth/v1/user", &client.endpoint))
+            .query(&[("apikey", &client.token)])
+            .bearer_auth(&signup.access_token)
             .json(attributes)
+            .send()
+            .await?
+            .json::<User>()
+            .await?;
+        Ok(res)
+    }
+
+    /// Fetch the user.
+    pub async fn get(client: &Client, signup: &Signup) -> Result<Self, Error> {
+        let res = reqwest::Client::new()
+            .get(&format!("{}/auth/v1/user", &client.endpoint))
+            .query(&[("apikey", &client.token)])
+            .bearer_auth(&signup.access_token)
             .send()
             .await?
             .json::<User>()
