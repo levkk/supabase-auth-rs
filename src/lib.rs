@@ -8,6 +8,7 @@
 use chrono::{DateTime, Utc};
 use reqwest::RequestBuilder;
 use serde::{Deserialize, Serialize};
+use serde_json::from_str;
 use uuid::Uuid;
 
 /// Supabase Auth user.
@@ -71,6 +72,9 @@ impl Default for AnonymousSigninOptions {
 pub enum Error {
     #[error("{0}")]
     Http(#[from] reqwest::Error),
+
+    #[error("{0}")]
+    Json(#[from] serde_json::Error),
 }
 
 /// Supabase Auth HTTP client.
@@ -96,6 +100,14 @@ impl Client {
             endpoint: endpoint.to_string(),
             token: token.to_string(),
         }
+    }
+
+    /// Create new Supabase Auth client from environment.
+    pub fn new_from_env() -> Self {
+        Self::new(
+            option_env!("SUPABASE_ENDPOINT").expect("SUPABAS_ENDPOINT not set"),
+            option_env!("SUPABASE_TOKEN").expect("SUPABASE_TOKEN not set"),
+        )
     }
 
     fn request(&self, action: &str) -> RequestBuilder {
@@ -149,6 +161,34 @@ impl Signup {
         let now = Utc::now().timestamp();
         self.expires_at < now
     }
+
+    /// Fetch and refresh auth.
+    pub async fn fetch(name: &str) -> Result<Option<Self>, Error> {
+        if let Some(auth) = LocalStorage::get(name) {
+            let auth: Signup = from_str(&auth)?;
+
+            if auth.expired() {
+                let client = Client::new_from_env();
+                let auth = auth.refresh_token(&client).await?;
+
+                Ok(Some(auth))
+            } else {
+                Ok(Some(auth))
+            }
+        } else {
+            Ok(None)
+        }
+    }
+
+    /// Validate session before using.
+    pub async fn session(self) -> Result<Self, Error> {
+        if self.expired() {
+            let client = Client::new_from_env();
+            self.refresh_token(&client).await
+        } else {
+            Ok(self)
+        }
+    }
 }
 
 impl User {
@@ -185,6 +225,35 @@ impl User {
             .await?;
         Ok(res)
     }
+}
+
+/// localStorage wrapper.
+pub struct LocalStorage;
+
+impl LocalStorage {
+    /// Get handle to localStorage.
+    pub fn handle() -> web_sys::Storage {
+        web_sys::window().unwrap().local_storage().unwrap().unwrap()
+    }
+
+    /// Set item.
+    pub fn get(name: &str) -> Option<String> {
+        let handle = Self::handle();
+
+        handle.get_item(name).unwrap()
+    }
+
+    /// Get item.
+    pub fn set(name: &str, value: impl ToString) {
+        let handle = Self::handle();
+
+        handle.set_item(name, &value.to_string()).unwrap();
+    }
+}
+
+/// Get localStorage handle.
+pub fn local_storage() -> web_sys::Storage {
+    web_sys::window().unwrap().local_storage().unwrap().unwrap()
 }
 
 #[cfg(test)]
