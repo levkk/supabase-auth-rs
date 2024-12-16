@@ -162,7 +162,7 @@ impl User {
         attributes: &serde_json::Value,
     ) -> Result<Self, Error> {
         let res = reqwest::Client::new()
-            .patch(&format!("{}/auth/v1/user", &client.endpoint))
+            .put(&format!("{}/auth/v1/user", &client.endpoint))
             .query(&[("apikey", &client.token)])
             .bearer_auth(&signup.access_token)
             .json(attributes)
