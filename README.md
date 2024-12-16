@@ -6,3 +6,5 @@ Supabase Auth client for the Rust programming language.
 
 - Sign in anonymously
 - Refresh JWT token
+- Retrieve user
+- Update user
