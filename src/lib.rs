@@ -264,7 +264,7 @@ impl User {
     }
 
     /// Make sure client has a pet identifier.
-    pub async fn sync(self, session: &Signup, pet_uuid: String) -> Result<Self, Error> {
+    pub async fn sync(self, session: &Signup, pet_uuid: String) -> Result<(Self, bool), Error> {
         let mut replace = false;
 
         if let Some(data) = self.user_metadata.as_object() {
@@ -292,9 +292,9 @@ impl User {
                 )
                 .await?;
 
-            Ok(user)
+            Ok((user, true))
         } else {
-            Ok(self)
+            Ok((self, false))
         }
     }
 }
