@@ -6,8 +6,9 @@
 //! - Refresh JWT token
 //!
 use chrono::{DateTime, Utc};
+use postgrest::Postgrest;
 use reqwest::RequestBuilder;
-use serde::{Deserialize, Serialize};
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use serde_json::from_str;
 use uuid::Uuid;
 
@@ -75,6 +76,9 @@ pub enum Error {
 
     #[error("{0}")]
     Json(#[from] serde_json::Error),
+
+    #[error("supabase not configured")]
+    NotConfigured,
 }
 
 /// Supabase Auth HTTP client.
@@ -105,9 +109,24 @@ impl Client {
     /// Create new Supabase Auth client from environment.
     pub fn new_from_env() -> Self {
         Self::new(
-            option_env!("SUPABASE_ENDPOINT").expect("SUPABAS_ENDPOINT not set"),
+            option_env!("SUPABASE_ENDPOINT").expect("SUPABASE_ENDPOINT not set"),
             option_env!("SUPABASE_TOKEN").expect("SUPABASE_TOKEN not set"),
         )
+        .check()
+        .unwrap()
+    }
+
+    fn check(self) -> Result<Self, Error> {
+        if self.endpoint.is_empty() || self.token.is_empty() {
+            return Err(Error::NotConfigured);
+        }
+
+        Ok(self)
+    }
+
+    /// Get database handle.
+    pub fn db(&self) -> Postgrest {
+        Postgrest::new(format!("{}/rest/v1", &self.endpoint)).insert_header("apikey", &self.token)
     }
 
     fn request(&self, action: &str) -> RequestBuilder {
@@ -120,6 +139,7 @@ impl Client {
     pub async fn sign_in_anonymously(
         &self,
         options: &AnonymousSigninOptions,
+        name: &str,
     ) -> Result<Signup, Error> {
         let req = self.request("signup");
         let json = serde_json::json!({
@@ -130,6 +150,8 @@ impl Client {
 
         });
         let res = req.json(&json).send().await?.json::<Signup>().await?;
+
+        LocalStorage::set(name, serde_json::to_string(&res).unwrap());
 
         Ok(res)
     }
@@ -171,6 +193,8 @@ impl Signup {
                 let client = Client::new_from_env();
                 let auth = auth.refresh_token(&client).await?;
 
+                LocalStorage::set(name, serde_json::to_string(&auth).unwrap());
+
                 Ok(Some(auth))
             } else {
                 Ok(Some(auth))
@@ -180,14 +204,27 @@ impl Signup {
         }
     }
 
+    /// Save session in localStorage.
+    pub fn save(&self, name: &str) {
+        LocalStorage::set(name, serde_json::to_string(self).unwrap())
+    }
+
     /// Validate session before using.
-    pub async fn session(self) -> Result<Self, Error> {
+    pub async fn session(self) -> Result<(Self, bool), Error> {
         if self.expired() {
             let client = Client::new_from_env();
-            self.refresh_token(&client).await
+            Ok((self.refresh_token(&client).await?, true))
         } else {
-            Ok(self)
+            Ok((self, false))
         }
+    }
+
+    /// Get authenticated database handle.
+    pub fn db(&self, table: &str) -> postgrest::Builder {
+        Client::new_from_env()
+            .db()
+            .from(table)
+            .auth(&self.access_token)
     }
 }
 
@@ -225,6 +262,41 @@ impl User {
             .await?;
         Ok(res)
     }
+
+    /// Make sure client has a pet identifier.
+    pub async fn sync(self, session: &Signup, pet_uuid: String) -> Result<Self, Error> {
+        let mut replace = false;
+
+        if let Some(data) = self.user_metadata.as_object() {
+            if let Some(stored) = data.get("pet_uuid") {
+                if let Some(stored_str) = stored.as_str() {
+                    if stored_str != pet_uuid {
+                        replace = true;
+                    }
+                }
+            } else {
+                replace = true;
+            }
+        }
+
+        if replace {
+            let user = self
+                .update(
+                    &Client::new_from_env(),
+                    session,
+                    &serde_json::json!({
+                        "data": {
+                            "pet_uuid": pet_uuid,
+                        }
+                    }),
+                )
+                .await?;
+
+            Ok(user)
+        } else {
+            Ok(self)
+        }
+    }
 }
 
 /// localStorage wrapper.
@@ -254,6 +326,31 @@ impl LocalStorage {
 /// Get localStorage handle.
 pub fn local_storage() -> web_sys::Storage {
     web_sys::window().unwrap().local_storage().unwrap().unwrap()
+}
+
+/// PostgREST query.
+pub struct Query {
+    builder: postgrest::Builder,
+}
+
+impl Query {
+    pub fn new(builder: postgrest::Builder) -> Self {
+        Self { builder }
+    }
+
+    /// Fetch result and convert to Rust struct.
+    pub async fn fetch_all<T: DeserializeOwned + Clone>(self) -> Result<Vec<T>, Error> {
+        let result = self.builder.execute().await.unwrap().text().await.unwrap();
+
+        Ok(from_str::<Vec<T>>(&result)?)
+    }
+
+    /// Fetch result and convert to Rust struct.
+    pub async fn fetch_one<T: DeserializeOwned + Clone>(self) -> Result<Option<T>, Error> {
+        let result = self.fetch_all().await?;
+
+        Ok(result.first().cloned())
+    }
 }
 
 #[cfg(test)]

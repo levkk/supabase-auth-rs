@@ -15,3 +15,4 @@ uuid = { version = "1", features = ["serde"] }
 chrono = { version = "0.4", features = ["serde"] }
 thiserror = "1"
 web-sys = "0.3"
+postgrest = "*"
